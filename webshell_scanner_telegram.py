@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Web Shell Scanner with Telegram Notification
----------------------------------------------
+Web Shell Scanner with Telegram Notification (SSL Warning Fixed)
+-----------------------------------------------------------------
 Script untuk mendeteksi potensi web shell dengan notifikasi Telegram.
 HANYA gunakan pada website yang Anda miliki atau memiliki izin!
 
 Author: Security Scanner
-Version: 2.0 (with Telegram Alert)
+Version: 2.1 (SSL Warning Fixed)
 """
 
 import requests
@@ -18,6 +18,11 @@ from typing import List, Dict, Set
 import argparse
 from datetime import datetime
 import json
+import warnings
+
+# Suppress SSL warnings (for security scanning purposes)
+from urllib3.exceptions import InsecureRequestWarning
+warnings.filterwarnings('ignore', category=InsecureRequestWarning)
 
 class TelegramNotifier:
     """Class untuk mengirim notifikasi ke Telegram"""
@@ -118,7 +123,7 @@ class TelegramNotifier:
 
 class WebShellScanner:
     def __init__(self, base_url: str, timeout: int = 10, threads: int = 10,
-                 telegram_notifier: TelegramNotifier = None):
+                 telegram_notifier: TelegramNotifier = None, verify_ssl: bool = False):
         self.base_url = base_url.rstrip('/')
         self.timeout = timeout
         self.threads = threads
@@ -126,6 +131,7 @@ class WebShellScanner:
         self.checked_urls = set()
         self.telegram = telegram_notifier
         self.start_time = None
+        self.verify_ssl = verify_ssl
         
         # Daftar nama file web shell yang umum
         self.common_webshell_names = [
@@ -184,7 +190,7 @@ class WebShellScanner:
         
         # Headers untuk request
         self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Security Scanner Bot) WebShell Detector/2.0',
+            'User-Agent': 'Mozilla/5.0 (Security Scanner Bot) WebShell Detector/2.1',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
         }
 
@@ -197,7 +203,7 @@ class WebShellScanner:
         
         try:
             response = requests.get(url, headers=self.headers, timeout=self.timeout, 
-                                   allow_redirects=False, verify=False)
+                                   allow_redirects=False, verify=self.verify_ssl)
             
             result = {
                 'url': url,
@@ -258,11 +264,12 @@ class WebShellScanner:
         self.start_time = datetime.now()
         
         print(f"\n{'='*70}")
-        print(f"Web Shell Scanner with Telegram Notification")
+        print(f"Web Shell Scanner with Telegram Notification v2.1")
         print(f"{'='*70}")
         print(f"Target: {self.base_url}")
         print(f"Started: {self.start_time.strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"Telegram: {'Enabled ✓' if self.telegram and self.telegram.enabled else 'Disabled'}")
+        print(f"SSL Verify: {'Enabled ✓' if self.verify_ssl else 'Disabled (for security scanning)'}")
         print(f"{'='*70}\n")
         
         urls_to_scan = self.scan_common_paths()
@@ -374,7 +381,7 @@ def test_telegram_connection(bot_token: str, chat_id: str) -> bool:
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Web Shell Scanner with Telegram Notification',
+        description='Web Shell Scanner with Telegram Notification (SSL Warning Fixed)',
         epilog='Example: python webshell_scanner_telegram.py -u https://example.com -tb YOUR_BOT_TOKEN -tc YOUR_CHAT_ID',
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -396,6 +403,13 @@ def main():
                                help='Test koneksi Telegram dan keluar')
     telegram_group.add_argument('--no-telegram', action='store_true',
                                help='Disable notifikasi Telegram')
+    
+    # SSL options
+    ssl_group = parser.add_argument_group('SSL/TLS Options')
+    ssl_group.add_argument('--verify-ssl', action='store_true',
+                          help='Enable SSL certificate verification (default: disabled for security scanning)')
+    ssl_group.add_argument('--no-ssl-warnings', action='store_true',
+                          help='Suppress SSL warning messages (already enabled by default)')
     
     args = parser.parse_args()
     
@@ -449,7 +463,8 @@ def main():
             args.url, 
             timeout=args.timeout, 
             threads=args.workers,
-            telegram_notifier=telegram_notifier
+            telegram_notifier=telegram_notifier,
+            verify_ssl=args.verify_ssl
         )
         scanner.scan()
     except KeyboardInterrupt:
